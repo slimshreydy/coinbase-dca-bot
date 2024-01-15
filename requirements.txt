@@ -1,5 +1,7 @@
 modal
+black==23.12.1
 cryptography==41.0.7
 PyJWT==2.8.0
+pylint==3.0.3
 python-dotenv==1.0.0
 requests==2.31.0
