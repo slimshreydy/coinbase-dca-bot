@@ -1,0 +1,14 @@
+{
+  "policies": [
+    {
+      "token": "BTC",
+      "budget": 15,
+      "frequency": 2
+    },
+    {
+      "token": "ETH",
+      "budget": 15,
+      "frequency": 1
+    }
+  ]
+}
