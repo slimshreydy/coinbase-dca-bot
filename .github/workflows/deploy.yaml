@@ -22,7 +22,7 @@ jobs:
           python-version: "3.11"
 
       - name: Set up worker (e.g. install Modal client package)
-        run: make setup
+        run: make setup-ci
 
       - name: Run deployment script
         run: |
