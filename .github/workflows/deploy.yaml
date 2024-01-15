@@ -1,0 +1,30 @@
+name: Deploy to Modal
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to Modal
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-20.04
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      MODAL_ENVIRONMENT: main
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Set up worker (e.g. install Modal client package)
+        run: make setup
+
+      - name: Run deployment script
+        run: |
+          make deploy
+          
