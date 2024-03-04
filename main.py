@@ -187,12 +187,17 @@ def dca():
         )
         raise e
 
+    boost_multiplier = 1
+    for boost in dca_policy["boosts"]:
+        if run_time < datetime.datetime.strptime(boost["end_date"], "%Y-%m-%dT%H:%M:%SZ"):
+            boost_multiplier = boost["multiplier"]
+
     # Figure out how many funds are needed for today's buy, since this amount varies by day based on DCA policies.
     funds_required = 0
     for policy in dca_policy["policies"]:
         if run_time.timetuple().tm_yday % policy["frequency"] != 0:
             continue
-        funds_required += policy["budget"]
+        funds_required += policy["budget"] * boost_multiplier
     # Include some extra funds to cover the transaction fees. 0.6% is the worst possible maker fee right now.
     convert_usdc(funds_required * (1 + WORST_MAKER_FEE_RATE))
     # Wait for USDC conversion to commit on Coinbase's end.
@@ -201,7 +206,7 @@ def dca():
     for policy in dca_policy["policies"]:
         try:
             print(f'attempting DCA for {policy["token"]}')
-            dca_for_asset(policy["token"], policy["budget"], policy["frequency"], run_time)
+            dca_for_asset(policy["token"], policy["budget"] * boost_multiplier, policy["frequency"], run_time)
         except DCAError as e:
             print(e)
             continue
