@@ -11,7 +11,7 @@ run:
 
 push-policy:
 	DCA_POLICY=$$(python -c 'import json, sys; json.dump(json.load(sys.stdin), sys.stdout)' < config.json); \
-	modal secret create dca-policy DCA_POLICY="$$DCA_POLICY"
+	modal secret create --force dca-policy DCA_POLICY="$$DCA_POLICY"
 
 lint:
 	black -l 120 .
