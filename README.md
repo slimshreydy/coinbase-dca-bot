@@ -47,3 +47,6 @@ The format expected for `config.json` is:
 - If you want to DCA into a token for < $10/day, just set a $10 `budget` with `frequency` > 1. This means you'll spend $10 every few days, which works out to a smaller daily effective budget.
 - Sometimes if the market is high volatile, you may be interested in temporarily boosting the amount you invest daily (e.g. doubling your amount invested for 1 week). You can do this by specifying a boost in `config.json`. Generally you just need to specify what factor you want to boost by, and when to stop boosting.
 - If you'd like to temporarily stop DCA'ing, you can also use the `boosts` feature to stop investing by just setting a multiplier of 0.
+
+# Limitations
+- The bot currently cannot handle float/decimal numbers in the config. All numbers must be integers.
