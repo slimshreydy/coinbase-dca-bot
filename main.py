@@ -11,9 +11,10 @@ import modal
 import requests
 from cryptography.hazmat.primitives import serialization
 from dotenv import load_dotenv
+from upstash_redis import Redis
 
 load_dotenv()
-stub = modal.Stub("coinbase-dca")
+app = modal.App("coinbase-dca")
 image = modal.Image.debian_slim().pip_install_from_requirements("requirements.txt")
 
 WORST_MAKER_FEE_RATE = 0.006
@@ -22,6 +23,21 @@ WORST_MAKER_FEE_RATE = 0.006
 class DCAError(Exception):
     pass
 
+def get_redis(key):
+    redis = Redis(url=os.environ["UPSTASH_REDIS_REST_URL"], token=os.environ["UPSTASH_REDIS_REST_TOKEN"])
+    return redis.get(key)
+
+def getall_redis():
+    redis = Redis(url=os.environ["UPSTASH_REDIS_REST_URL"], token=os.environ["UPSTASH_REDIS_REST_TOKEN"])
+    return redis.keys("*")
+
+def set_redis(key, value):
+    redis = Redis(url=os.environ["UPSTASH_REDIS_REST_URL"], token=os.environ["UPSTASH_REDIS_REST_TOKEN"])
+    redis.set(key, value)
+
+def delete_redis(key):
+    redis = Redis(url=os.environ["UPSTASH_REDIS_REST_URL"], token=os.environ["UPSTASH_REDIS_REST_TOKEN"])
+    redis.delete(key)
 
 def build_jwt(service, uri):
     """Builds JWTs for Coinbase Advanced Trading APIs using the private API key."""
@@ -127,6 +143,7 @@ def round_to_precision(amt, precision):
 
 
 def dca_for_asset(asset, budget, frequency, run_time):
+    # Orders have a 3 hour deadline before they get dropped.
     deadline = run_time + datetime.timedelta(hours=3)
 
     if run_time.timetuple().tm_yday % frequency != 0:
@@ -164,16 +181,74 @@ def dca_for_asset(asset, budget, frequency, run_time):
             f"Full details: {resp_json}"
         )
     order_details = resp_json["order_configuration"]["limit_limit_gtd"]
+    order_id = resp_json["success_response"]["order_id"]
+    set_redis(order_id, run_time.isoformat())
     print(
         f"Successfully placed order for {order_details['base_size']} {asset} @ ${order_details['limit_price']} "
         f"(order ID = {resp_json['success_response']['order_id']})"
     )
 
 
-# DCA Bot runs at 3pm EST every day (8pm UTC)
-@stub.function(
+def add_sell_order_for_asset(order_id):
+    print(f"Adding sell order for {order_id}")
+    get_resp = coinbase_get(f"api.coinbase.com/api/v3/brokerage/orders/historical/{order_id}")
+    get_resp_json = get_resp.json()
+    status = get_resp_json["order"]["status"]
+    if status == "FILLED":
+        asset = get_resp_json["order"]["product_id"].split("-")[0]
+        asset_data = get_asset_info(asset)
+        filled_size = float(get_resp_json["order"]["filled_size"])
+        filled_price = float(get_resp_json["order"]["average_filled_price"])
+        sell_size = round_to_precision(filled_size / 2, asset_data["base_precision"])
+        limit_price = round_to_precision(filled_price * 1.1, asset_data["quote_precision"])
+        stop_price = round_to_precision(filled_price * 0.9, asset_data["quote_precision"])
+        post_resp = coinbase_post(
+            "api.coinbase.com/api/v3/brokerage/orders",
+            body={
+                "client_order_id": f"{order_id}-SELL",
+                "product_id": get_resp_json["order"]["product_id"],
+                "side": "SELL",
+                "order_configuration": {
+                    "trigger_bracket_gtc": {
+                        # The API expects all numbers to be passed as string due to the precision requirements.
+                        "base_size": str(sell_size),
+                        "limit_price": str(limit_price),
+                        "stop_trigger_price": str(stop_price),
+                    }
+                },
+            },
+        )
+        post_resp_json = post_resp.json()
+        if not post_resp_json["success"]:
+            raise DCAError(
+                f"Error placing sell order for {asset}, reason = {post_resp_json['error_response']['message']}. "
+                f"Full details: {post_resp_json}"
+            )
+        new_order_id = post_resp_json["success_response"]["order_id"]
+        print(f"Successfully posted sell order for {order_id}: SELL {sell_size} {asset} below {stop_price} or above "
+              f"{limit_price}. New order ID = {new_order_id}")
+        delete_redis(order_id)
+    elif status in ["CANCELLED", "EXPIRED", "FAILED"]:
+        delete_redis(order_id)
+
+@app.function(
     image=image,
-    secrets=[modal.Secret.from_name("coinbase"), modal.Secret.from_name("dca-policy")],
+    secrets=[modal.Secret.from_name("coinbase"), modal.Secret.from_name("upstash-coinbase-dca")],
+    schedule=modal.Cron("*/10 21-23 * * *"),
+)
+def add_sell_orders():
+    orders = getall_redis()
+    for order_id in orders:
+        try:
+            add_sell_order_for_asset(order_id)
+        except DCAError as e:
+            print(e)
+            continue
+
+# DCA Bot runs at 8pm UTC every day
+@app.function(
+    image=image,
+    secrets=[modal.Secret.from_name("coinbase"), modal.Secret.from_name("dca-policy"), modal.Secret.from_name("upstash-coinbase-dca")],
     schedule=modal.Cron("0 20 * * *"),
 )
 def dca():
@@ -212,6 +287,6 @@ def dca():
             continue
 
 
-@stub.local_entrypoint()
+@app.local_entrypoint()
 def main():
-    dca.remote()
+    add_sell_orders.remote()

@@ -10,5 +10,11 @@
       "budget": 15,
       "frequency": 1
     }
+  ],
+  "boosts": [
+    {
+      "multiplier": 1,
+      "end_date": "2024-07-13T23:59:59Z"
+    }
   ]
 }
