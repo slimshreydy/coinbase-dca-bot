@@ -10,8 +10,10 @@ run:
 	modal run main.py
 
 push-policy:
+	modal profile activate default && \
 	DCA_POLICY=$$(python -c 'import json, sys; json.dump(json.load(sys.stdin), sys.stdout)' < config.json); \
-	modal secret create --force dca-policy DCA_POLICY="$$DCA_POLICY"
+	modal secret create --force dca-policy DCA_POLICY="$$DCA_POLICY" && \
+	modal profile activate anecdote-travel
 
 lint:
 	black -l 120 .

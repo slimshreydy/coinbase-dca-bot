@@ -149,7 +149,7 @@ def dca_for_asset(asset, budget, frequency, run_time):
     if run_time.timetuple().tm_yday % frequency != 0:
         print(f"Skipping {asset} because policy says to only purchase every {frequency} days")
         return
-    market = f"{asset}-USD"
+    market = f"{asset}-USDC"
     asset_data = get_asset_info(asset)
     latest_quote = get_latest_quote(asset)
     # Slightly underball the highest bid to ensure we take advantage of the lower maker fee pricing.
@@ -267,16 +267,17 @@ def dca():
         if run_time < datetime.datetime.strptime(boost["end_date"], "%Y-%m-%dT%H:%M:%SZ"):
             boost_multiplier = boost["multiplier"]
 
+    # THIS SECTION IS NO LONGER NEEDED DUE TO CB MERGING USD AND USDC LIQUIDITY
     # Figure out how many funds are needed for today's buy, since this amount varies by day based on DCA policies.
-    funds_required = 0
-    for policy in dca_policy["policies"]:
-        if run_time.timetuple().tm_yday % policy["frequency"] != 0:
-            continue
-        funds_required += policy["budget"] * boost_multiplier
+    # funds_required = 0
+    # for policy in dca_policy["policies"]:
+    #     if run_time.timetuple().tm_yday % policy["frequency"] != 0:
+    #         continue
+    #     funds_required += policy["budget"] * boost_multiplier
     # Include some extra funds to cover the transaction fees. 0.6% is the worst possible maker fee right now.
-    convert_usdc(funds_required * (1 + WORST_MAKER_FEE_RATE))
+    # convert_usdc(funds_required * (1 + WORST_MAKER_FEE_RATE))
     # Wait for USDC conversion to commit on Coinbase's end.
-    time.sleep(10)
+    # time.sleep(10)
 
     for policy in dca_policy["policies"]:
         try:
